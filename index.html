@@ -69,7 +69,7 @@
 
         /* --- PAINEL DE SORTEIO --- */
         .sidebar {
-            flex: 0 0 380px; /* Alargado um pouco para acomodar botões maiores */
+            flex: 0 0 380px;
             background: white;
             padding: 18px;
             border-radius: 12px;
@@ -273,15 +273,15 @@
             margin-bottom: 15px;
         }
 
-        /* NÚMEROS AUMENTADOS */
+        /* NÚMEROS DE SORTEIO MAIORES */
         .num-btn {
-            padding: 12px 0; /* Aumentado */
-            font-size: 18px; /* Aumentado */
+            padding: 12px 0;
+            font-size: 18px;
             border: 1px solid #cdd6e0;
             background: #fff;
             border-radius: 4px;
             cursor: pointer;
-            font-weight: 900; /* Mais negrito */
+            font-weight: 900;
             color: var(--primary);
             box-shadow: 0 2px 0 #d1d8e0;
         }
@@ -608,7 +608,7 @@
     <!-- MODAL DA CÂMERA PROFISSIONAL -->
     <div id="camera-modal" class="camera-modal">
         <div class="camera-header-modal">
-            <h3>Alinhe SÓ a grade de números no quadro</h3>
+            <h3>Alinhe BEM JUSTO a grade de números</h3>
             <button onclick="closeCameraScanner()">❌ Fechar</button>
         </div>
         <div class="video-container">
@@ -641,7 +641,7 @@
 
         function init() {
             createCallerBoard();
-            createPrizeBoard(30); // AGORA INICIA COM 30 RODADAS
+            createPrizeBoard(30); // Prepara para 30 rodadas
             loadRoundState(currentRound);
         }
 
@@ -900,7 +900,7 @@
 
         function updateCounter() { counterText.textContent = `${allCards.length} / ${MAX_CARDS} Cartelas`; }
 
-        // --- SISTEMA AVANÇADO DE CÂMERA E IA ---
+        // --- SISTEMA AVANÇADO DE CÂMERA E IA (UPSCALING & GRADE FÍSICA) ---
         let videoStreamTrack = null;
 
         async function openCameraScanner() {
@@ -914,7 +914,7 @@
                 videoStreamTrack = stream.getTracks()[0];
                 modal.style.display = 'flex';
             } catch (error) {
-                alert("Erro ao acessar a câmera. Verifique as permissões (necessita HTTPS).");
+                alert("Erro ao acessar a câmera. Verifique as permissões do seu navegador (necessita HTTPS).");
             }
         }
 
@@ -924,35 +924,24 @@
             modal.style.display = 'none';
         }
 
-        // Função para limpar a imagem e deixar preta e branca (melhora OCR em 90%)
-        function applyBinarization(ctx, width, height) {
-            let imgData = ctx.getImageData(0, 0, width, height);
-            let pixels = imgData.data;
-            for (let i = 0; i < pixels.length; i += 4) {
-                let r = pixels[i]; let g = pixels[i + 1]; let b = pixels[i + 2];
-                let gray = (r * 0.299) + (g * 0.587) + (b * 0.114);
-                let color = gray < 140 ? 0 : 255;
-                pixels[i] = pixels[i+1] = pixels[i+2] = color;
-            }
-            ctx.putImageData(imgData, 0, 0);
-        }
-
         async function captureAndProcess() {
             const video = document.getElementById('video-stream');
             const guide = document.querySelector('.scanner-guide');
             const canvas = document.getElementById('hidden-canvas');
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            const ctx = canvas.getContext('2d');
             const statusText = document.getElementById('scan-status');
             const btnCapture = document.querySelector('.btn-capture');
 
             let originalBtnText = btnCapture.textContent;
-            btnCapture.textContent = "📷 Capturando e Analisando...";
+            btnCapture.textContent = "📷 Focando e Analisando...";
             btnCapture.disabled = true;
 
+            // Aguarda 1 segundo para a lente da câmera do celular focar bem
             setTimeout(async () => {
                 try {
                     const videoRect = video.getBoundingClientRect();
                     const guideRect = guide.getBoundingClientRect();
+                    
                     const scaleX = video.videoWidth / videoRect.width;
                     const scaleY = video.videoHeight / videoRect.height;
 
@@ -961,21 +950,23 @@
                     const cropWidth = guideRect.width * scaleX;
                     const cropHeight = guideRect.height * scaleY;
 
-                    canvas.width = cropWidth;
-                    canvas.height = cropHeight;
+                    // 1. UPSCALING 2X (A MÁGICA DA PRECISÃO)
+                    canvas.width = cropWidth * 2;
+                    canvas.height = cropHeight * 2;
 
-                    // Desenha a foto recortada
-                    ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-                    
-                    // Aplica o filtro Preto e Branco absoluto
-                    applyBinarization(ctx, cropWidth, cropHeight);
+                    // 2. FILTRO DE AUTO-CONTRASTE DO NAVEGADOR
+                    ctx.filter = 'grayscale(100%) contrast(200%) brightness(120%)';
+
+                    // Desenha a imagem ampliada e filtrada
+                    ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
                     
                     closeCameraScanner();
                     statusText.style.display = 'block';
-                    statusText.textContent = "Extraindo grade de números...";
+                    statusText.textContent = "Lendo números em alta resolução...";
 
                     const imageData = canvas.toDataURL('image/jpeg', 1.0);
 
+                    // 3. IA TESSERACT
                     const worker = await Tesseract.createWorker('eng');
                     await worker.setParameters({
                         tessedit_char_whitelist: '0123456789',
@@ -985,11 +976,11 @@
                     const result = await worker.recognize(imageData);
                     await worker.terminate(); 
 
-                    if (!result || !result.data || !result.data.words) throw new Error("Falha na leitura.");
+                    if (!result || !result.data || !result.data.words) throw new Error("Nenhum texto detectado.");
 
                     let validItems = [];
 
-                    // Coleta os números com suas coordenadas X e Y
+                    // Pega as posições X e Y de cada número lido
                     result.data.words.forEach(w => {
                         let text = w.text.trim(); 
                         if(text) {
@@ -1003,29 +994,26 @@
                     });
 
                     if (validItems.length > 0) {
-                        let minX = Math.min(...validItems.map(i => i.cx));
-                        let maxX = Math.max(...validItems.map(i => i.cx));
-                        let minY = Math.min(...validItems.map(i => i.cy));
-                        let maxY = Math.max(...validItems.map(i => i.cy));
-
-                        let colWidth = (maxX - minX) / 4;
-                        let rowHeight = (maxY - minY) / 4;
-
-                        if (colWidth < 10) colWidth = 50; 
-                        if (rowHeight < 10) rowHeight = 50;
+                        
+                        // 4. GRADE ABSOLUTA BASEADA NO QUADRADO VERDE
+                        let colWidth = canvas.width / 5;
+                        let rowHeight = canvas.height / 5;
 
                         let formattedCard = new Array(25).fill('');
                         let numbersAdded = 0;
 
                         validItems.forEach(item => {
-                            let col = Math.round((item.cx - minX) / colWidth);
-                            let row = Math.round((item.cy - minY) / rowHeight);
+                            // Descobre a caixa exata onde o número caiu (0 a 4)
+                            let col = Math.floor(item.cx / colWidth);
+                            let row = Math.floor(item.cy / rowHeight);
 
+                            // Travas de segurança
                             if (col < 0) col = 0; if (col > 4) col = 4;
                             if (row < 0) row = 0; if (row > 4) row = 4;
 
                             let index = row * 5 + col;
 
+                            // 5. REGRA DE VALIDAÇÃO DO BINGO
                             let isValidForCol = false;
                             if (col === 0 && item.number >= 1 && item.number <= 15) isValidForCol = true;
                             if (col === 1 && item.number >= 16 && item.number <= 30) isValidForCol = true;
@@ -1048,22 +1036,22 @@
                         addCardUI(formattedCard, customName);
                         
                         if(numbersAdded < 24) {
-                            alert(`Foram colocados ${numbersAdded} números nas posições exatas.\nPreencha os campos em branco manualmente.`);
+                            alert(`Pronto! A IA leu ${numbersAdded} números com precisão e os encaixou.\nComplete os campos vazios tocando neles.`);
                         }
 
                     } else {
-                        alert("Nenhum número válido encontrado. Tente alinhar a grade de números no quadrado verde e evite sombras.");
+                        alert("Nenhum número legível encontrado. Garanta que a cartela preencha todo o quadrado verde.");
                     }
                 } catch (error) {
                     console.error(error);
-                    alert("A imagem não pôde ser processada. Tente com mais iluminação.");
+                    alert("A imagem não pôde ser lida. Tente limpar a lente da câmera e ter boa luz.");
                     closeCameraScanner();
                 } finally {
                     statusText.style.display = 'none';
                     btnCapture.textContent = originalBtnText;
                     btnCapture.disabled = false;
                 }
-            }, 800);
+            }, 1000); 
         }
 
         init();
