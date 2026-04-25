@@ -630,7 +630,7 @@
     <!-- MODAL DA CÂMERA PROFISSIONAL -->
     <div id="camera-modal" class="camera-modal">
         <div class="camera-header-modal">
-            <h3>Alinhe SÓ OS NÚMEROS no quadro</h3>
+            <h3>Alinhe SÓ A GRADE no quadro</h3>
             <button onclick="closeCameraScanner()">❌ Fechar</button>
         </div>
         <div class="video-container">
@@ -663,7 +663,7 @@
 
         // --- SISTEMA DE AUTO-SAVE (NÃO PERDE DADOS AO ATUALIZAR) ---
         function persistData() {
-            saveCurrentRoundState(); // Atualiza a rodada atual antes de salvar no disco
+            saveCurrentRoundState(); 
             const dataToSave = {
                 currentRound: currentRound,
                 nextCardIndex: nextCardIndex,
@@ -684,13 +684,13 @@
                 if(data.gameMode) {
                     document.querySelector(`input[name="gamemode"][value="${data.gameMode}"]`).checked = true;
                 }
-                return true; // Encontrou dados salvos
+                return true; 
             }
-            return false; // É a primeira vez abrindo
+            return false; 
         }
 
         function resetSystem() {
-            if(confirm("ATENÇÃO: Isso apagará todas as cartelas, rodadas e sorteios salvos. Deseja começar um evento novo do zero?")) {
+            if(confirm("ATENÇÃO: Isso apagará todas as cartelas, rodadas e sorteios. Deseja começar um evento novo do zero?")) {
                 localStorage.removeItem('alvesBingoData');
                 location.reload();
             }
@@ -706,9 +706,7 @@
             createCallerBoard();
             createPrizeBoard(30); 
             
-            const hasSavedData = loadPersistedData();
-            
-            // Restaura os prêmios digitados se existirem (prêmios não estão no roundsData, vamos recuperá-los de outra forma simples depois, mas o core está salvo)
+            loadPersistedData();
             loadRoundState(currentRound);
         }
 
@@ -761,7 +759,7 @@
                 callHistory.push(num);
             }
             updateLastCalledUI(); 
-            saveAndCheck(); // Salva na memória
+            saveAndCheck(); 
         }
 
         function updateLastCalledUI() {
@@ -795,7 +793,6 @@
             const name = savedName || `Cartela ${getLetterName(nextCardIndex)}`;
             const cardObj = { id: nextCardIndex, name: name, inputs: [], element: null };
             
-            // Só incrementa se for uma cartela nova gerada agora
             if (!savedName) nextCardIndex++;
 
             const wrapper = document.createElement('div');
@@ -832,7 +829,7 @@
                     input.max = 75;
                     let col = i % 5;
                     input.placeholder = `${col * 15 + 1}-${(col + 1) * 15}`; 
-                    input.addEventListener('input', saveAndCheck); // Salva se editar na mão
+                    input.addEventListener('input', saveAndCheck); 
                     
                     if(savedValues && savedValues[i]) input.value = savedValues[i];
                     grid.appendChild(input);
@@ -950,7 +947,6 @@
             if (data.cards.length > 0) {
                 data.cards.forEach(c => addCardUI(c.values, c.name));
             } else {
-                // Só adiciona uma cartela vazia se a rodada 1 for virgem
                 if (roundNum === 1 && Object.keys(roundsData).length <= 1) addCardUI(); 
             }
             
@@ -980,7 +976,7 @@
 
         function updateCounter() { counterText.textContent = `${allCards.length} / ${MAX_CARDS} Cartelas`; }
 
-        // --- SISTEMA DE CÂMERA INFALÍVEL POR COLUNAS DE BINGO ---
+        // --- SISTEMA DE CÂMERA DE COORDENADA CRUZADA (INFALÍVEL) ---
         let videoStreamTrack = null;
 
         async function openCameraScanner() {
@@ -1055,7 +1051,7 @@
                     
                     closeCameraScanner();
                     statusText.style.display = 'block';
-                    statusText.textContent = "IA organizando números nas colunas certas...";
+                    statusText.textContent = "IA mapeando grade exata...";
 
                     const imageData = canvas.toDataURL('image/jpeg', 1.0);
 
@@ -1070,77 +1066,73 @@
 
                     if (!result || !result.data || !result.data.words) throw new Error("Nenhum número detectado.");
 
-                    // LOGICA DE COLUNAS INFALÍVEL
-                    // Criamos baldes para as colunas B, I, N, G, O
-                    let cols = [[], [], [], [], []];
+                    let validItems = [];
 
                     result.data.words.forEach(w => {
                         let text = w.text.trim(); 
                         if(text) {
                             let n = parseInt(text, 10);
                             if(n >= 1 && n <= 75) {
-                                let cy = (w.bbox.y0 + w.bbox.y1) / 2; // Só importa a altura
-                                
-                                // O valor do número define OBRIGATORIAMENTE a coluna
-                                if (n >= 1 && n <= 15) cols[0].push({number: n, cy: cy});
-                                else if (n >= 16 && n <= 30) cols[1].push({number: n, cy: cy});
-                                else if (n >= 31 && n <= 45) cols[2].push({number: n, cy: cy});
-                                else if (n >= 46 && n <= 60) cols[3].push({number: n, cy: cy});
-                                else if (n >= 61 && n <= 75) cols[4].push({number: n, cy: cy});
+                                let cy = (w.bbox.y0 + w.bbox.y1) / 2; 
+                                validItems.push({ number: n, cy: cy });
                             }
                         }
                     });
 
-                    let formattedCard = new Array(25).fill('');
-                    let numbersAdded = 0;
-
-                    // Para cada coluna, organiza de cima pra baixo e preenche a cartela
-                    for (let c = 0; c < 5; c++) {
-                        // Ordena os números da coluna da menor altura(topo) para maior(fundo)
-                        cols[c].sort((a, b) => a.cy - b.cy);
+                    if (validItems.length > 0) {
                         
-                        // Remove números duplicados lidos pela IA por engano
-                        let uniqueCol = [];
-                        let seen = new Set();
-                        for(let item of cols[c]) {
-                            if(!seen.has(item.number)) {
-                                seen.add(item.number);
-                                uniqueCol.push(item);
+                        // Divide o espaço físico do quadrado verde da câmera em 5 LINHAS HORIZONTAIS
+                        let rowHeight = canvas.height / 5;
+
+                        let formattedCard = new Array(25).fill('');
+                        let numbersAdded = 0;
+
+                        validItems.forEach(item => {
+                            let n = item.number;
+
+                            // 1. ACHA A COLUNA PELO VALOR DO NÚMERO (INFAILÍVEL)
+                            let col = -1;
+                            if (n >= 1 && n <= 15) col = 0;
+                            else if (n >= 16 && n <= 30) col = 1;
+                            else if (n >= 31 && n <= 45) col = 2;
+                            else if (n >= 46 && n <= 60) col = 3;
+                            else if (n >= 61 && n <= 75) col = 4;
+
+                            if (col !== -1) {
+                                // 2. ACHA A LINHA PELA POSIÇÃO FÍSICA NO QUADRADO DA CÂMERA (INFAILÍVEL)
+                                let row = Math.floor(item.cy / rowHeight);
+
+                                // Travas de segurança
+                                if (row < 0) row = 0;
+                                if (row > 4) row = 4;
+
+                                let index = row * 5 + col;
+
+                                // Pula o Meio
+                                if (index !== 12) {
+                                    if (formattedCard[index] === '') {
+                                        formattedCard[index] = n;
+                                        numbersAdded++;
+                                    }
+                                }
                             }
+                        });
+
+                        let defaultName = `Cartela ${getLetterName(nextCardIndex)}`;
+                        let customName = prompt("Cartela lida com sucesso! Digite um nome/número:", defaultName);
+                        if (!customName || customName.trim() === '') customName = defaultName;
+
+                        addCardUI(formattedCard, customName);
+                        
+                        if(numbersAdded === 24) {
+                            alert("PERFEITO! Todos os números foram colocados nos seus lugares exatos.");
+                        } else {
+                            alert(`Foram colocados ${numbersAdded} números nos seus buracos corretos.\nOs números que faltaram na foto ficaram em branco. Complete tocando neles.`);
                         }
 
-                        let rowIndex = 0;
-                        for (let i = 0; i < uniqueCol.length; i++) {
-                            if (rowIndex > 4) break; // Máximo de 5 linhas por coluna
-                            
-                            let index = rowIndex * 5 + c;
-                            
-                            // Pula o espaço central (Linha 3, Coluna 3 -> index 12)
-                            if (index === 12) {
-                                rowIndex++;
-                                index = rowIndex * 5 + c;
-                            }
-                            
-                            if (rowIndex <= 4) {
-                                formattedCard[index] = uniqueCol[i].number;
-                                numbersAdded++;
-                                rowIndex++;
-                            }
-                        }
-                    }
-
-                    let defaultName = `Cartela ${getLetterName(nextCardIndex)}`;
-                    let customName = prompt("Cartela lida! Digite um nome/número:", defaultName);
-                    if (!customName || customName.trim() === '') customName = defaultName;
-
-                    addCardUI(formattedCard, customName);
-                    
-                    if(numbersAdded === 24) {
-                        alert("SUCESSO! Os 24 números foram lidos e colocados 100% nas colunas certas.");
                     } else {
-                        alert(`Quase lá! A IA leu ${numbersAdded} números.\nEles foram colocados estritamente em suas colunas (B,I,N,G,O). Complete os buracos tocando neles.`);
+                        alert("Não foi possível ler os números. Enquadre a cartela no quadrado verde.");
                     }
-
                 } catch (error) {
                     console.error(error);
                     alert("Erro na leitura. Tente alinhar a cartela e usar um local bem iluminado.");
