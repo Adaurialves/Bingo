@@ -530,6 +530,7 @@
             box-shadow: 0 4px 15px rgba(67, 154, 117, 0.5);
         }
         .btn-capture:active { transform: scale(0.95); }
+        .btn-capture:disabled { background: #7f8c8d; box-shadow: none; transform: none; cursor: not-allowed; }
 
         @media (max-width: 768px) {
             .main-layout { flex-direction: column; }
@@ -969,114 +970,146 @@
 
         async function captureAndProcess() {
             const video = document.getElementById('video-stream');
+            const guide = document.querySelector('.scanner-guide');
             const canvas = document.getElementById('hidden-canvas');
             const ctx = canvas.getContext('2d');
             const statusText = document.getElementById('scan-status');
 
-            // Define o tamanho do canvas para a resolução real do vídeo
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            
-            // Tira a "foto" e desenha no canvas escondido
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Fecha o scanner visual
-            closeCameraScanner();
-            
-            statusText.style.display = 'block';
-            statusText.style.color = '#8e44ad';
-            statusText.textContent = "Processando imagem com Inteligência Artificial...";
+            // Muda o texto do botão para dar um feedback visual
+            const btnCapture = document.querySelector('.btn-capture');
+            let originalBtnText = btnCapture.textContent;
+            btnCapture.textContent = "📷 Focando...";
+            btnCapture.disabled = true;
 
-            try {
-                // Pega a imagem do canvas em formato base64
-                const imageData = canvas.toDataURL('image/png');
+            // Aguarda 800 milissegundos para a câmera do celular focar a imagem
+            setTimeout(async () => {
+                try {
+                    // --- MATEMÁTICA PARA RECORTAR SÓ O QUADRO VERDE ---
+                    const videoRect = video.getBoundingClientRect();
+                    const guideRect = guide.getBoundingClientRect();
 
-                // Inicia o Tesseract
-                const worker = await Tesseract.createWorker('eng');
-                
-                // O SEGREDO PROFISSIONAL: Força o OCR a procurar SÓ números. Ignora letras e sujeiras!
-                await worker.setParameters({
-                    tessedit_char_whitelist: '0123456789',
-                });
+                    // Descobre a proporção real do vídeo em relação ao tamanho na tela
+                    const scaleX = video.videoWidth / videoRect.width;
+                    const scaleY = video.videoHeight / videoRect.height;
 
-                const result = await worker.recognize(imageData);
-                await worker.terminate(); 
+                    // Calcula exatamente onde o quadrado verde está no vídeo original
+                    const cropX = (guideRect.left - videoRect.left) * scaleX;
+                    const cropY = (guideRect.top - videoRect.top) * scaleY;
+                    const cropWidth = guideRect.width * scaleX;
+                    const cropHeight = guideRect.height * scaleY;
 
-                if (!result || !result.data || !result.data.words) {
-                    throw new Error("Não foi possível identificar os números.");
-                }
+                    // Ajusta o canvas apenas para o tamanho do recorte
+                    canvas.width = cropWidth;
+                    canvas.height = cropHeight;
 
-                let validItems = [];
+                    // Melhora o contraste da imagem antes de tirar a foto (ajuda muito o OCR)
+                    ctx.filter = 'contrast(1.2) grayscale(1)';
 
-                // Extração dos números lidos
-                result.data.words.forEach(w => {
-                    if (!w || !w.text || !w.bbox) return; 
+                    // Desenha SÓ a parte de dentro do quadro verde
+                    ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
                     
-                    let text = w.text.trim(); 
-                    if(text) {
-                        let n = parseInt(text, 10);
-                        if(n >= 1 && n <= 75) {
-                            let cy = (w.bbox.y0 + w.bbox.y1) / 2;
-                            validItems.push({ number: n, cy: cy });
-                        }
+                    // Fecha a câmera visualmente
+                    closeCameraScanner();
+                    
+                    statusText.style.display = 'block';
+                    statusText.style.color = '#8e44ad';
+                    statusText.textContent = "Lendo cartela com Inteligência Artificial...";
+
+                    // Pega a imagem cortada com qualidade máxima
+                    const imageData = canvas.toDataURL('image/jpeg', 1.0);
+
+                    // --- INICIA A IA ---
+                    const worker = await Tesseract.createWorker('eng');
+                    
+                    // CONFIGURAÇÕES AVANÇADAS PARA BINGO
+                    await worker.setParameters({
+                        tessedit_char_whitelist: '0123456789', // Só números
+                        tessedit_pageseg_mode: '11', // PSM 11: Textos esparsos (perfeito para grades de números)
+                    });
+
+                    const result = await worker.recognize(imageData);
+                    await worker.terminate(); 
+
+                    if (!result || !result.data || !result.data.words) {
+                        throw new Error("Não foi possível identificar os números.");
                     }
-                });
 
-                if (validItems.length > 0) {
-                    
-                    // --- CÁLCULO MATEMÁTICO DA GRADE ---
-                    let min_cy = Math.min(...validItems.map(item => item.cy)); 
-                    let max_cy = Math.max(...validItems.map(item => item.cy)); 
-                    let row_spacing = max_cy > min_cy ? (max_cy - min_cy) / 4 : 1;
+                    let validItems = [];
 
-                    let formattedCard = new Array(25).fill('');
-                    let numerosLidos = new Set(); 
-
-                    validItems.forEach(item => {
-                        let n = item.number;
-                        if (numerosLidos.has(n)) return;
+                    result.data.words.forEach(w => {
+                        if (!w || !w.text || !w.bbox) return; 
                         
-                        let col = -1;
-                        if (n >= 1 && n <= 15) col = 0;
-                        else if (n >= 16 && n <= 30) col = 1;
-                        else if (n >= 31 && n <= 45) col = 2;
-                        else if (n >= 46 && n <= 60) col = 3;
-                        else if (n >= 61 && n <= 75) col = 4;
-
-                        let row = Math.round((item.cy - min_cy) / row_spacing);
-                        if (row < 0) row = 0;
-                        if (row > 4) row = 4;
-
-                        let index = row * 5 + col;
-                        
-                        if (index !== 12) { // Pula o meio (Logo)
-                            if (formattedCard[index] === '') {
-                                formattedCard[index] = n;
-                                numerosLidos.add(n);
+                        let text = w.text.trim(); 
+                        if(text) {
+                            let n = parseInt(text, 10);
+                            if(n >= 1 && n <= 75) {
+                                // Pega a altura central do número na imagem
+                                let cy = (w.bbox.y0 + w.bbox.y1) / 2;
+                                validItems.push({ number: n, cy: cy });
                             }
                         }
                     });
 
-                    let defaultName = `Cartela ${getLetterName(nextCardIndex)}`;
-                    let customName = prompt("Cartela lida com sucesso! Digite um identificador:", defaultName);
-                    
-                    if (!customName || customName.trim() === '') customName = defaultName;
+                    if (validItems.length > 0) {
+                        
+                        let min_cy = Math.min(...validItems.map(item => item.cy)); 
+                        let max_cy = Math.max(...validItems.map(item => item.cy)); 
+                        
+                        // Como a imagem já está cortada, se só houver uma linha, evitamos erro
+                        let row_spacing = (max_cy - min_cy) > 10 ? (max_cy - min_cy) / 4 : 1;
 
-                    addCardUI(formattedCard, customName);
-                    
-                    if(numerosLidos.size < 24) {
-                        alert(`Atenção: A IA identificou ${numerosLidos.size} números.\nOs números lidos foram colocados nas posições corretas. Por favor, complete os campos vazios manualmente.`);
+                        let formattedCard = new Array(25).fill('');
+                        let numerosLidos = new Set(); 
+
+                        validItems.forEach(item => {
+                            let n = item.number;
+                            if (numerosLidos.has(n)) return;
+                            
+                            let col = -1;
+                            if (n >= 1 && n <= 15) col = 0;
+                            else if (n >= 16 && n <= 30) col = 1;
+                            else if (n >= 31 && n <= 45) col = 2;
+                            else if (n >= 46 && n <= 60) col = 3;
+                            else if (n >= 61 && n <= 75) col = 4;
+
+                            let row = Math.round((item.cy - min_cy) / row_spacing);
+                            if (row < 0) row = 0;
+                            if (row > 4) row = 4;
+
+                            let index = row * 5 + col;
+                            
+                            if (index !== 12) { // Pula a logo central
+                                if (formattedCard[index] === '') {
+                                    formattedCard[index] = n;
+                                    numerosLidos.add(n);
+                                }
+                            }
+                        });
+
+                        let defaultName = `Cartela ${getLetterName(nextCardIndex)}`;
+                        let customName = prompt("Cartela lida com sucesso! Nome ou Nº da cartela:", defaultName);
+                        
+                        if (!customName || customName.trim() === '') customName = defaultName;
+
+                        addCardUI(formattedCard, customName);
+                        
+                        if(numerosLidos.size < 24) {
+                            alert(`Foram lidos ${numerosLidos.size} números.\nEles foram colocados nas posições corretas. Verifique a cartela na tela e complete os que faltaram.`);
+                        }
+
+                    } else {
+                        alert("A IA não conseguiu ler os números. Certifique-se de enquadrar BEM a cartela debaixo de boa luz.");
                     }
-
-                } else {
-                    alert("A IA não encontrou números legíveis. Tente alinhar a cartela perfeitamente dentro do quadrado, com boa iluminação.");
+                } catch (error) {
+                    console.error("Erro no OCR: ", error);
+                    alert("A imagem ficou borrada ou muito escura. Tente novamente com mais iluminação.");
+                    closeCameraScanner();
+                } finally {
+                    statusText.style.display = 'none';
+                    btnCapture.textContent = originalBtnText;
+                    btnCapture.disabled = false;
                 }
-            } catch (error) {
-                console.error("Erro no OCR: ", error);
-                alert("Ocorreu um erro no processamento da imagem.");
-            } finally {
-                statusText.style.display = 'none';
-            }
+            }, 800); // 800ms de tempo para o auto-focus da câmera agir
         }
 
         init();
