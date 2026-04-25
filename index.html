@@ -539,7 +539,6 @@
             .cards-area { width: 100%; }
             .card-wrapper { width: 100%; max-width: 380px; }
             .numbers-grid { grid-template-columns: repeat(10, 1fr); gap: 2px;}
-            /* Botões do celular maiores também */
             .num-btn { padding: 10px 0; font-size: 16px;} 
         }
     </style>
@@ -547,7 +546,6 @@
 <body>
 
     <div class="logo-container">
-        <!-- Coloque a imagem da sua logo na mesma pasta ou cole o link aqui -->
         <img src="logo.png" alt="Alves Pro System Logo">
         <h1 style="margin:0; font-size:24px; color:var(--primary); font-weight:900;">ALVES PRO SYSTEM</h1>
     </div>
@@ -608,7 +606,7 @@
     <!-- MODAL DA CÂMERA PROFISSIONAL -->
     <div id="camera-modal" class="camera-modal">
         <div class="camera-header-modal">
-            <h3>Alinhe BEM JUSTO a grade de números</h3>
+            <h3>Alinhe SÓ OS NÚMEROS no quadro</h3>
             <button onclick="closeCameraScanner()">❌ Fechar</button>
         </div>
         <div class="video-container">
@@ -641,7 +639,7 @@
 
         function init() {
             createCallerBoard();
-            createPrizeBoard(30); // Prepara para 30 rodadas
+            createPrizeBoard(30); 
             loadRoundState(currentRound);
         }
 
@@ -900,13 +898,14 @@
 
         function updateCounter() { counterText.textContent = `${allCards.length} / ${MAX_CARDS} Cartelas`; }
 
-        // --- SISTEMA AVANÇADO DE CÂMERA E IA (UPSCALING & GRADE FÍSICA) ---
+        // --- SISTEMA DE CÂMERA 100% PROFISSIONAL ---
         let videoStreamTrack = null;
 
         async function openCameraScanner() {
             const modal = document.getElementById('camera-modal');
             const video = document.getElementById('video-stream');
             try {
+                // Força a resolução máxima e câmera traseira
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
                 });
@@ -914,7 +913,7 @@
                 videoStreamTrack = stream.getTracks()[0];
                 modal.style.display = 'flex';
             } catch (error) {
-                alert("Erro ao acessar a câmera. Verifique as permissões do seu navegador (necessita HTTPS).");
+                alert("Erro ao acessar a câmera. Verifique as permissões do navegador (necessita HTTPS).");
             }
         }
 
@@ -924,19 +923,47 @@
             modal.style.display = 'none';
         }
 
+        // Função "Estilo CamScanner" - Transforma a foto em um documento perfeito
+        function enhanceImageForOCR(ctx, width, height) {
+            let imgData = ctx.getImageData(0, 0, width, height);
+            let data = imgData.data;
+            let totalBrightness = 0;
+
+            // Passo 1: Transforma em tons de cinza e descobre a claridade média da foto
+            for (let i = 0; i < data.length; i += 4) {
+                let r = data[i], g = data[i+1], b = data[i+2];
+                let gray = (r * 0.299 + g * 0.587 + b * 0.114);
+                data[i] = data[i+1] = data[i+2] = gray;
+                totalBrightness += gray;
+            }
+
+            let avgBrightness = totalBrightness / (width * height);
+            // Define o ponto de corte para separar o que é papel (fundo) do que é tinta (número)
+            let threshold = avgBrightness * 0.85;
+
+            // Passo 2: Apaga o fundo (deixa branco puro) e engrossa os números (preto puro)
+            for (let i = 0; i < data.length; i += 4) {
+                let gray = data[i];
+                let color = gray < threshold ? 0 : 255;
+                data[i] = data[i+1] = data[i+2] = color;
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+        }
+
         async function captureAndProcess() {
             const video = document.getElementById('video-stream');
             const guide = document.querySelector('.scanner-guide');
             const canvas = document.getElementById('hidden-canvas');
-            const ctx = canvas.getContext('2d');
+            // 'willReadFrequently' deixa o processamento da imagem mais rápido no celular
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
             const statusText = document.getElementById('scan-status');
             const btnCapture = document.querySelector('.btn-capture');
 
             let originalBtnText = btnCapture.textContent;
-            btnCapture.textContent = "📷 Focando e Analisando...";
+            btnCapture.textContent = "📷 Limpando e Analisando...";
             btnCapture.disabled = true;
 
-            // Aguarda 1 segundo para a lente da câmera do celular focar bem
             setTimeout(async () => {
                 try {
                     const videoRect = video.getBoundingClientRect();
@@ -950,37 +977,36 @@
                     const cropWidth = guideRect.width * scaleX;
                     const cropHeight = guideRect.height * scaleY;
 
-                    // 1. UPSCALING 2X (A MÁGICA DA PRECISÃO)
+                    // 1. UPSCALING 2X (Dobra o tamanho para a IA ler perfeitamente)
                     canvas.width = cropWidth * 2;
                     canvas.height = cropHeight * 2;
 
-                    // 2. FILTRO DE AUTO-CONTRASTE DO NAVEGADOR
-                    ctx.filter = 'grayscale(100%) contrast(200%) brightness(120%)';
-
-                    // Desenha a imagem ampliada e filtrada
+                    // Desenha a imagem na tela invisível
                     ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+                    
+                    // 2. APLICA O FILTRO PROFISSIONAL (Tipo CamScanner)
+                    enhanceImageForOCR(ctx, canvas.width, canvas.height);
                     
                     closeCameraScanner();
                     statusText.style.display = 'block';
-                    statusText.textContent = "Lendo números em alta resolução...";
+                    statusText.textContent = "IA processando todos os números...";
 
                     const imageData = canvas.toDataURL('image/jpeg', 1.0);
 
-                    // 3. IA TESSERACT
+                    // 3. IA TESSERACT CONFIGURADA PARA BLOCOS DE TEXTO ALINHADOS
                     const worker = await Tesseract.createWorker('eng');
                     await worker.setParameters({
                         tessedit_char_whitelist: '0123456789',
-                        tessedit_pageseg_mode: '11', 
+                        tessedit_pageseg_mode: '6', // PSM 6: Informa a IA que é um bloco perfeitamente alinhado
                     });
 
                     const result = await worker.recognize(imageData);
                     await worker.terminate(); 
 
-                    if (!result || !result.data || !result.data.words) throw new Error("Nenhum texto detectado.");
+                    if (!result || !result.data || !result.data.words) throw new Error("Nenhum número detectado.");
 
                     let validItems = [];
 
-                    // Pega as posições X e Y de cada número lido
                     result.data.words.forEach(w => {
                         let text = w.text.trim(); 
                         if(text) {
@@ -995,7 +1021,7 @@
 
                     if (validItems.length > 0) {
                         
-                        // 4. GRADE ABSOLUTA BASEADA NO QUADRADO VERDE
+                        // 4. GRADE FÍSICA ESTRITA (Baseada no tamanho da tela)
                         let colWidth = canvas.width / 5;
                         let rowHeight = canvas.height / 5;
 
@@ -1003,17 +1029,15 @@
                         let numbersAdded = 0;
 
                         validItems.forEach(item => {
-                            // Descobre a caixa exata onde o número caiu (0 a 4)
                             let col = Math.floor(item.cx / colWidth);
                             let row = Math.floor(item.cy / rowHeight);
 
-                            // Travas de segurança
                             if (col < 0) col = 0; if (col > 4) col = 4;
                             if (row < 0) row = 0; if (row > 4) row = 4;
 
                             let index = row * 5 + col;
 
-                            // 5. REGRA DE VALIDAÇÃO DO BINGO
+                            // 5. REGRA DO BINGO
                             let isValidForCol = false;
                             if (col === 0 && item.number >= 1 && item.number <= 15) isValidForCol = true;
                             if (col === 1 && item.number >= 16 && item.number <= 30) isValidForCol = true;
@@ -1030,21 +1054,23 @@
                         });
 
                         let defaultName = `Cartela ${getLetterName(nextCardIndex)}`;
-                        let customName = prompt("Cartela lida! Nome ou Nº da cartela:", defaultName);
+                        let customName = prompt("Cartela lida com sucesso! Digite um nome/número:", defaultName);
                         if (!customName || customName.trim() === '') customName = defaultName;
 
                         addCardUI(formattedCard, customName);
                         
-                        if(numbersAdded < 24) {
-                            alert(`Pronto! A IA leu ${numbersAdded} números com precisão e os encaixou.\nComplete os campos vazios tocando neles.`);
+                        if(numbersAdded === 24) {
+                            alert("MÁXIMA PRECISÃO! Todos os 24 números foram lidos e encaixados perfeitamente.");
+                        } else {
+                            alert(`Quase lá! A IA leu ${numbersAdded} números com precisão.\nComplete os que faltaram tocando nos espaços em branco.`);
                         }
 
                     } else {
-                        alert("Nenhum número legível encontrado. Garanta que a cartela preencha todo o quadrado verde.");
+                        alert("Não foi possível ler os números. Enquadre APENAS a grade de números no quadrado verde da tela.");
                     }
                 } catch (error) {
                     console.error(error);
-                    alert("A imagem não pôde ser lida. Tente limpar a lente da câmera e ter boa luz.");
+                    alert("A imagem não pôde ser lida. Tente limpar a lente e melhorar a iluminação.");
                     closeCameraScanner();
                 } finally {
                     statusText.style.display = 'none';
