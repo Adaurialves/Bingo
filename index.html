@@ -69,7 +69,7 @@
 
         /* --- PAINEL DE SORTEIO --- */
         .sidebar {
-            flex: 0 0 360px;
+            flex: 0 0 380px; /* Alargado um pouco para acomodar botões maiores */
             background: white;
             padding: 18px;
             border-radius: 12px;
@@ -273,14 +273,15 @@
             margin-bottom: 15px;
         }
 
+        /* NÚMEROS AUMENTADOS */
         .num-btn {
-            padding: 8px 0;
-            font-size: 14px;
+            padding: 12px 0; /* Aumentado */
+            font-size: 18px; /* Aumentado */
             border: 1px solid #cdd6e0;
             background: #fff;
             border-radius: 4px;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 900; /* Mais negrito */
             color: var(--primary);
             box-shadow: 0 2px 0 #d1d8e0;
         }
@@ -495,7 +496,7 @@
             height: 60%;
             border: 3px solid rgba(67, 154, 117, 0.8);
             border-radius: 10px;
-            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.6); /* Escurece o fundo fora do quadro */
+            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.6); 
             display: flex;
             justify-content: center;
         }
@@ -511,7 +512,7 @@
 
         @keyframes scan {
             0% { transform: translateY(0); }
-            50% { transform: translateY(1000%); } /* Ajuste de altura da linha */
+            50% { transform: translateY(1000%); } 
             100% { transform: translateY(0); }
         }
 
@@ -538,7 +539,8 @@
             .cards-area { width: 100%; }
             .card-wrapper { width: 100%; max-width: 380px; }
             .numbers-grid { grid-template-columns: repeat(10, 1fr); gap: 2px;}
-            .num-btn { padding: 8px 0; font-size: 13px;}
+            /* Botões do celular maiores também */
+            .num-btn { padding: 10px 0; font-size: 16px;} 
         }
     </style>
 </head>
@@ -586,7 +588,6 @@
 
             <div class="numbers-grid" id="caller-board"></div>
             
-            <!-- Botão modificado para abrir o Scanner Interno -->
             <button class="btn-large btn-camera" onclick="openCameraScanner()">📷 Escanear Cartela Profissional</button>
             <div id="scan-status">Aguarde... Lendo cartela...</div>
 
@@ -607,7 +608,7 @@
     <!-- MODAL DA CÂMERA PROFISSIONAL -->
     <div id="camera-modal" class="camera-modal">
         <div class="camera-header-modal">
-            <h3>Alinhe a cartela no quadro</h3>
+            <h3>Alinhe SÓ a grade de números no quadro</h3>
             <button onclick="closeCameraScanner()">❌ Fechar</button>
         </div>
         <div class="video-container">
@@ -636,19 +637,16 @@
         let nextCardIndex = 0; 
         const MAX_CARDS = 30; 
         let currentRound = 1;
-
         let roundsData = {};
 
         function init() {
             createCallerBoard();
-            createPrizeBoard(5);
+            createPrizeBoard(30); // AGORA INICIA COM 30 RODADAS
             loadRoundState(currentRound);
         }
 
         function createPrizeBoard(numRounds) {
-            for(let i = 1; i <= numRounds; i++) {
-                addPrizeRow(i);
-            }
+            for(let i = 1; i <= numRounds; i++) addPrizeRow(i);
             updateActivePrizeRow();
         }
 
@@ -701,9 +699,7 @@
 
         function updateLastCalledUI() {
             document.querySelectorAll('.num-btn').forEach(btn => btn.classList.remove('last-called'));
-            
             ballsCountText.textContent = calledNumbers.size;
-
             if (callHistory.length > 0) {
                 const lastNum = callHistory[callHistory.length - 1];
                 lastCalledText.textContent = lastNum;
@@ -768,11 +764,7 @@
                     let col = i % 5;
                     input.placeholder = `${col * 15 + 1}-${(col + 1) * 15}`; 
                     input.addEventListener('input', checkAllCards);
-
-                    if(savedValues && savedValues[i]) {
-                        input.value = savedValues[i];
-                    }
-
+                    if(savedValues && savedValues[i]) input.value = savedValues[i];
                     grid.appendChild(input);
                     cardObj.inputs.push(input);
                 }
@@ -781,7 +773,6 @@
             wrapper.appendChild(grid);
             cardsContainer.appendChild(wrapper);
             allCards.push(cardObj);
-            
             updateCounter();
             checkAllCards(); 
         }
@@ -815,15 +806,11 @@
 
             allCards.forEach(card => {
                 let hasWon = false;
-
                 card.inputs.forEach((input, i) => {
                     if (i === 12) return; 
                     const val = parseInt(input.value);
-                    if (val && calledNumbers.has(val)) {
-                        input.classList.add('matched');
-                    } else {
-                        input.classList.remove('matched');
-                    }
+                    if (val && calledNumbers.has(val)) input.classList.add('matched');
+                    else input.classList.remove('matched');
                 });
 
                 const isMarked = (idx) => idx === 12 || card.inputs[idx].classList.contains('matched');
@@ -833,14 +820,10 @@
                     for (let i = 0; i < 5; i++) if (isMarked(i) && isMarked(i+5) && isMarked(i+10) && isMarked(i+15) && isMarked(i+20)) hasWon = true;
                     if (isMarked(0) && isMarked(6) && isMarked(12) && isMarked(18) && isMarked(24)) hasWon = true;
                     if (isMarked(4) && isMarked(8) && isMarked(12) && isMarked(16) && isMarked(20)) hasWon = true;
-                } 
-                else if (gameMode === 'cheia') {
+                } else if (gameMode === 'cheia') {
                     let full = true;
                     for (let i = 0; i < 25; i++) {
-                        if (i !== 12 && !isMarked(i)) {
-                            full = false;
-                            break;
-                        }
+                        if (i !== 12 && !isMarked(i)) { full = false; break; }
                     }
                     if (full) hasWon = true;
                 }
@@ -857,7 +840,6 @@
                 let activePrizeInput = document.getElementById(`prize-input-${currentRound}`);
                 let prizeText = activePrizeInput ? activePrizeInput.value.trim() : '';
                 let prizeHTML = prizeText ? `<span class="alert-prize">Prêmio: <b>${prizeText}</b></span>` : '';
-                
                 globalAlert.innerHTML = `🎉 BINGO! Vencedor(es):<br><b>${winners.join(', ')}</b> 🎉 ${prizeHTML}`;
                 globalAlert.style.display = 'block';
             } else {
@@ -871,9 +853,7 @@
                 history: [...callHistory],
                 cards: allCards.map(c => {
                     const values = new Array(25).fill('');
-                    c.inputs.forEach((input, i) => { 
-                        if (i !== 12) values[i] = input.value; 
-                    });
+                    c.inputs.forEach((input, i) => { if (i !== 12) values[i] = input.value; });
                     return { name: c.name, values: values };
                 })
             };
@@ -883,233 +863,207 @@
             cardsContainer.innerHTML = '';
             allCards = [];
             nextCardIndex = 0;
-
-            if (!roundsData[roundNum]) {
-                roundsData[roundNum] = { called: [], history: [], cards: [] };
-            }
-
+            if (!roundsData[roundNum]) roundsData[roundNum] = { called: [], history: [], cards: [] };
             const data = roundsData[roundNum];
             calledNumbers = new Set(data.called);
             callHistory = [...data.history];
 
             document.querySelectorAll('.num-btn').forEach(btn => {
                 const num = parseInt(btn.textContent);
-                if (calledNumbers.has(num)) {
-                    btn.classList.add('called');
-                } else {
-                    btn.classList.remove('called');
-                }
+                if (calledNumbers.has(num)) btn.classList.add('called');
+                else btn.classList.remove('called');
             });
 
-            if (data.cards.length > 0) {
-                data.cards.forEach(c => addCardUI(c.values, c.name));
-            } else {
-                addCardUI(); 
-            }
+            if (data.cards.length > 0) data.cards.forEach(c => addCardUI(c.values, c.name));
+            else addCardUI(); 
+            
             updateLastCalledUI();
         }
 
         function nextRound() {
             if(confirm(`Ir para a próxima rodada? Suas cartelas atuais serão salvas nesta rodada.`)) {
-                saveCurrentRoundState(); 
-                currentRound++; 
+                saveCurrentRoundState(); currentRound++; 
                 roundDisplay.textContent = `Rodada ${currentRound}`; 
-                
-                updateActivePrizeRow(); 
-                loadRoundState(currentRound); 
+                updateActivePrizeRow(); loadRoundState(currentRound); 
             }
         }
 
         function prevRound() {
             if (currentRound > 1) {
-                saveCurrentRoundState(); 
-                currentRound--;
+                saveCurrentRoundState(); currentRound--;
                 roundDisplay.textContent = `Rodada ${currentRound}`;
-                
-                updateActivePrizeRow(); 
-                loadRoundState(currentRound); 
+                updateActivePrizeRow(); loadRoundState(currentRound); 
             } else {
                 alert("Você já está na primeira rodada!");
             }
         }
 
-        function updateCounter() {
-            counterText.textContent = `${allCards.length} / ${MAX_CARDS} Cartelas`;
-        }
+        function updateCounter() { counterText.textContent = `${allCards.length} / ${MAX_CARDS} Cartelas`; }
 
-        // --- SISTEMA DE CÂMERA INTEGRADA PROFISSIONAL ---
+        // --- SISTEMA AVANÇADO DE CÂMERA E IA ---
         let videoStreamTrack = null;
 
         async function openCameraScanner() {
             const modal = document.getElementById('camera-modal');
             const video = document.getElementById('video-stream');
-            
             try {
-                // Pede permissão e abre a câmera traseira em alta resolução
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
                 });
-                
                 video.srcObject = stream;
                 videoStreamTrack = stream.getTracks()[0];
                 modal.style.display = 'flex';
-                
             } catch (error) {
-                alert("Erro ao acessar a câmera. Verifique as permissões do seu navegador (necessita HTTPS).");
-                console.error(error);
+                alert("Erro ao acessar a câmera. Verifique as permissões (necessita HTTPS).");
             }
         }
 
         function closeCameraScanner() {
             const modal = document.getElementById('camera-modal');
-            if (videoStreamTrack) {
-                videoStreamTrack.stop(); // Desliga a luz da câmera e encerra o uso
-            }
+            if (videoStreamTrack) videoStreamTrack.stop();
             modal.style.display = 'none';
+        }
+
+        // Função para limpar a imagem e deixar preta e branca (melhora OCR em 90%)
+        function applyBinarization(ctx, width, height) {
+            let imgData = ctx.getImageData(0, 0, width, height);
+            let pixels = imgData.data;
+            for (let i = 0; i < pixels.length; i += 4) {
+                let r = pixels[i]; let g = pixels[i + 1]; let b = pixels[i + 2];
+                let gray = (r * 0.299) + (g * 0.587) + (b * 0.114);
+                let color = gray < 140 ? 0 : 255;
+                pixels[i] = pixels[i+1] = pixels[i+2] = color;
+            }
+            ctx.putImageData(imgData, 0, 0);
         }
 
         async function captureAndProcess() {
             const video = document.getElementById('video-stream');
             const guide = document.querySelector('.scanner-guide');
             const canvas = document.getElementById('hidden-canvas');
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
             const statusText = document.getElementById('scan-status');
-
-            // Muda o texto do botão para dar um feedback visual
             const btnCapture = document.querySelector('.btn-capture');
+
             let originalBtnText = btnCapture.textContent;
-            btnCapture.textContent = "📷 Focando...";
+            btnCapture.textContent = "📷 Capturando e Analisando...";
             btnCapture.disabled = true;
 
-            // Aguarda 800 milissegundos para a câmera do celular focar a imagem
             setTimeout(async () => {
                 try {
-                    // --- MATEMÁTICA PARA RECORTAR SÓ O QUADRO VERDE ---
                     const videoRect = video.getBoundingClientRect();
                     const guideRect = guide.getBoundingClientRect();
-
-                    // Descobre a proporção real do vídeo em relação ao tamanho na tela
                     const scaleX = video.videoWidth / videoRect.width;
                     const scaleY = video.videoHeight / videoRect.height;
 
-                    // Calcula exatamente onde o quadrado verde está no vídeo original
                     const cropX = (guideRect.left - videoRect.left) * scaleX;
                     const cropY = (guideRect.top - videoRect.top) * scaleY;
                     const cropWidth = guideRect.width * scaleX;
                     const cropHeight = guideRect.height * scaleY;
 
-                    // Ajusta o canvas apenas para o tamanho do recorte
                     canvas.width = cropWidth;
                     canvas.height = cropHeight;
 
-                    // Melhora o contraste da imagem antes de tirar a foto (ajuda muito o OCR)
-                    ctx.filter = 'contrast(1.2) grayscale(1)';
-
-                    // Desenha SÓ a parte de dentro do quadro verde
+                    // Desenha a foto recortada
                     ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
                     
-                    // Fecha a câmera visualmente
-                    closeCameraScanner();
+                    // Aplica o filtro Preto e Branco absoluto
+                    applyBinarization(ctx, cropWidth, cropHeight);
                     
+                    closeCameraScanner();
                     statusText.style.display = 'block';
-                    statusText.style.color = '#8e44ad';
-                    statusText.textContent = "Lendo cartela com Inteligência Artificial...";
+                    statusText.textContent = "Extraindo grade de números...";
 
-                    // Pega a imagem cortada com qualidade máxima
                     const imageData = canvas.toDataURL('image/jpeg', 1.0);
 
-                    // --- INICIA A IA ---
                     const worker = await Tesseract.createWorker('eng');
-                    
-                    // CONFIGURAÇÕES AVANÇADAS PARA BINGO
                     await worker.setParameters({
-                        tessedit_char_whitelist: '0123456789', // Só números
-                        tessedit_pageseg_mode: '11', // PSM 11: Textos esparsos (perfeito para grades de números)
+                        tessedit_char_whitelist: '0123456789',
+                        tessedit_pageseg_mode: '11', 
                     });
 
                     const result = await worker.recognize(imageData);
                     await worker.terminate(); 
 
-                    if (!result || !result.data || !result.data.words) {
-                        throw new Error("Não foi possível identificar os números.");
-                    }
+                    if (!result || !result.data || !result.data.words) throw new Error("Falha na leitura.");
 
                     let validItems = [];
 
+                    // Coleta os números com suas coordenadas X e Y
                     result.data.words.forEach(w => {
-                        if (!w || !w.text || !w.bbox) return; 
-                        
                         let text = w.text.trim(); 
                         if(text) {
                             let n = parseInt(text, 10);
                             if(n >= 1 && n <= 75) {
-                                // Pega a altura central do número na imagem
-                                let cy = (w.bbox.y0 + w.bbox.y1) / 2;
-                                validItems.push({ number: n, cy: cy });
+                                let cx = (w.bbox.x0 + w.bbox.x1) / 2;
+                                let cy = (w.bbox.y0 + w.bbox.y1) / 2; 
+                                validItems.push({ number: n, cx: cx, cy: cy });
                             }
                         }
                     });
 
                     if (validItems.length > 0) {
-                        
-                        let min_cy = Math.min(...validItems.map(item => item.cy)); 
-                        let max_cy = Math.max(...validItems.map(item => item.cy)); 
-                        
-                        // Como a imagem já está cortada, se só houver uma linha, evitamos erro
-                        let row_spacing = (max_cy - min_cy) > 10 ? (max_cy - min_cy) / 4 : 1;
+                        let minX = Math.min(...validItems.map(i => i.cx));
+                        let maxX = Math.max(...validItems.map(i => i.cx));
+                        let minY = Math.min(...validItems.map(i => i.cy));
+                        let maxY = Math.max(...validItems.map(i => i.cy));
+
+                        let colWidth = (maxX - minX) / 4;
+                        let rowHeight = (maxY - minY) / 4;
+
+                        if (colWidth < 10) colWidth = 50; 
+                        if (rowHeight < 10) rowHeight = 50;
 
                         let formattedCard = new Array(25).fill('');
-                        let numerosLidos = new Set(); 
+                        let numbersAdded = 0;
 
                         validItems.forEach(item => {
-                            let n = item.number;
-                            if (numerosLidos.has(n)) return;
-                            
-                            let col = -1;
-                            if (n >= 1 && n <= 15) col = 0;
-                            else if (n >= 16 && n <= 30) col = 1;
-                            else if (n >= 31 && n <= 45) col = 2;
-                            else if (n >= 46 && n <= 60) col = 3;
-                            else if (n >= 61 && n <= 75) col = 4;
+                            let col = Math.round((item.cx - minX) / colWidth);
+                            let row = Math.round((item.cy - minY) / rowHeight);
 
-                            let row = Math.round((item.cy - min_cy) / row_spacing);
-                            if (row < 0) row = 0;
-                            if (row > 4) row = 4;
+                            if (col < 0) col = 0; if (col > 4) col = 4;
+                            if (row < 0) row = 0; if (row > 4) row = 4;
 
                             let index = row * 5 + col;
-                            
-                            if (index !== 12) { // Pula a logo central
+
+                            let isValidForCol = false;
+                            if (col === 0 && item.number >= 1 && item.number <= 15) isValidForCol = true;
+                            if (col === 1 && item.number >= 16 && item.number <= 30) isValidForCol = true;
+                            if (col === 2 && item.number >= 31 && item.number <= 45) isValidForCol = true;
+                            if (col === 3 && item.number >= 46 && item.number <= 60) isValidForCol = true;
+                            if (col === 4 && item.number >= 61 && item.number <= 75) isValidForCol = true;
+
+                            if (index !== 12 && isValidForCol) {
                                 if (formattedCard[index] === '') {
-                                    formattedCard[index] = n;
-                                    numerosLidos.add(n);
+                                    formattedCard[index] = item.number;
+                                    numbersAdded++;
                                 }
                             }
                         });
 
                         let defaultName = `Cartela ${getLetterName(nextCardIndex)}`;
-                        let customName = prompt("Cartela lida com sucesso! Nome ou Nº da cartela:", defaultName);
-                        
+                        let customName = prompt("Cartela lida! Nome ou Nº da cartela:", defaultName);
                         if (!customName || customName.trim() === '') customName = defaultName;
 
                         addCardUI(formattedCard, customName);
                         
-                        if(numerosLidos.size < 24) {
-                            alert(`Foram lidos ${numerosLidos.size} números.\nEles foram colocados nas posições corretas. Verifique a cartela na tela e complete os que faltaram.`);
+                        if(numbersAdded < 24) {
+                            alert(`Foram colocados ${numbersAdded} números nas posições exatas.\nPreencha os campos em branco manualmente.`);
                         }
 
                     } else {
-                        alert("A IA não conseguiu ler os números. Certifique-se de enquadrar BEM a cartela debaixo de boa luz.");
+                        alert("Nenhum número válido encontrado. Tente alinhar a grade de números no quadrado verde e evite sombras.");
                     }
                 } catch (error) {
-                    console.error("Erro no OCR: ", error);
-                    alert("A imagem ficou borrada ou muito escura. Tente novamente com mais iluminação.");
+                    console.error(error);
+                    alert("A imagem não pôde ser processada. Tente com mais iluminação.");
                     closeCameraScanner();
                 } finally {
                     statusText.style.display = 'none';
                     btnCapture.textContent = originalBtnText;
                     btnCapture.disabled = false;
                 }
-            }, 800); // 800ms de tempo para o auto-focus da câmera agir
+            }, 800);
         }
 
         init();
