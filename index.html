@@ -56,7 +56,28 @@
             margin-bottom: 5px;
         }
 
-        p.subtitle { margin-top: 0; color: #555; margin-bottom: 15px; text-align: center; font-size: 15px; font-weight: 500;}
+        .header-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        p.subtitle { margin: 0; color: #555; text-align: center; font-size: 15px; font-weight: 500;}
+
+        .btn-reset {
+            background-color: var(--danger);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 0 #c0392b;
+        }
+        .btn-reset:active { transform: translateY(2px); box-shadow: none; }
 
         .main-layout {
             display: flex;
@@ -550,7 +571,10 @@
         <h1 style="margin:0; font-size:24px; color:var(--primary); font-weight:900;">ALVES PRO SYSTEM</h1>
     </div>
     
-    <p class="subtitle">Gerenciador Profissional de Rodadas e Cartelas</p>
+    <div class="header-controls">
+        <p class="subtitle">Gerenciador Profissional de Rodadas e Cartelas</p>
+        <button class="btn-reset" onclick="resetSystem()">Zerar Tudo</button>
+    </div>
 
     <div class="main-layout">
         
@@ -567,8 +591,8 @@
             </div>
 
             <div class="game-mode">
-                <label><input type="radio" name="gamemode" value="linha" checked onchange="checkAllCards()"> Linha / Coluna / Diagonal</label>
-                <label><input type="radio" name="gamemode" value="cheia" onchange="checkAllCards()"> Cartela Cheia</label>
+                <label><input type="radio" name="gamemode" value="linha" checked onchange="saveAndCheck()"> Linha / Coluna / Diagonal</label>
+                <label><input type="radio" name="gamemode" value="cheia" onchange="saveAndCheck()"> Cartela Cheia</label>
             </div>
 
             <div id="global-alert">🎉 BINGO! TEMOS VENCEDOR! 🎉</div>
@@ -637,9 +661,54 @@
         let currentRound = 1;
         let roundsData = {};
 
+        // --- SISTEMA DE AUTO-SAVE (NÃO PERDE DADOS AO ATUALIZAR) ---
+        function persistData() {
+            saveCurrentRoundState(); // Atualiza a rodada atual antes de salvar no disco
+            const dataToSave = {
+                currentRound: currentRound,
+                nextCardIndex: nextCardIndex,
+                roundsData: roundsData,
+                gameMode: document.querySelector('input[name="gamemode"]:checked').value
+            };
+            localStorage.setItem('alvesBingoData', JSON.stringify(dataToSave));
+        }
+
+        function loadPersistedData() {
+            const saved = localStorage.getItem('alvesBingoData');
+            if (saved) {
+                const data = JSON.parse(saved);
+                currentRound = data.currentRound || 1;
+                nextCardIndex = data.nextCardIndex || 0;
+                roundsData = data.roundsData || {};
+                
+                if(data.gameMode) {
+                    document.querySelector(`input[name="gamemode"][value="${data.gameMode}"]`).checked = true;
+                }
+                return true; // Encontrou dados salvos
+            }
+            return false; // É a primeira vez abrindo
+        }
+
+        function resetSystem() {
+            if(confirm("ATENÇÃO: Isso apagará todas as cartelas, rodadas e sorteios salvos. Deseja começar um evento novo do zero?")) {
+                localStorage.removeItem('alvesBingoData');
+                location.reload();
+            }
+        }
+
+        function saveAndCheck() {
+            checkAllCards();
+            persistData();
+        }
+
+        // --- INICIALIZAÇÃO ---
         function init() {
             createCallerBoard();
             createPrizeBoard(30); 
+            
+            const hasSavedData = loadPersistedData();
+            
+            // Restaura os prêmios digitados se existirem (prêmios não estão no roundsData, vamos recuperá-los de outra forma simples depois, mas o core está salvo)
             loadRoundState(currentRound);
         }
 
@@ -654,7 +723,7 @@
             row.id = `prize-row-${roundNum}`;
             row.innerHTML = `
                 <span>${roundNum}ª</span>
-                <input type="text" id="prize-input-${roundNum}" placeholder="Ex: TV, Dinheiro..." oninput="checkAllCards()">
+                <input type="text" id="prize-input-${roundNum}" placeholder="Ex: TV, Dinheiro..." oninput="persistData()">
             `;
             prizeListContainer.appendChild(row);
         }
@@ -692,7 +761,7 @@
                 callHistory.push(num);
             }
             updateLastCalledUI(); 
-            checkAllCards(); 
+            saveAndCheck(); // Salva na memória
         }
 
         function updateLastCalledUI() {
@@ -725,7 +794,9 @@
 
             const name = savedName || `Cartela ${getLetterName(nextCardIndex)}`;
             const cardObj = { id: nextCardIndex, name: name, inputs: [], element: null };
-            nextCardIndex++;
+            
+            // Só incrementa se for uma cartela nova gerada agora
+            if (!savedName) nextCardIndex++;
 
             const wrapper = document.createElement('div');
             wrapper.className = 'card-wrapper';
@@ -761,7 +832,8 @@
                     input.max = 75;
                     let col = i % 5;
                     input.placeholder = `${col * 15 + 1}-${(col + 1) * 15}`; 
-                    input.addEventListener('input', checkAllCards);
+                    input.addEventListener('input', saveAndCheck); // Salva se editar na mão
+                    
                     if(savedValues && savedValues[i]) input.value = savedValues[i];
                     grid.appendChild(input);
                     cardObj.inputs.push(input);
@@ -772,7 +844,7 @@
             cardsContainer.appendChild(wrapper);
             allCards.push(cardObj);
             updateCounter();
-            checkAllCards(); 
+            saveAndCheck(); 
         }
 
         function removeCard(id) {
@@ -783,7 +855,7 @@
                     allCards[index].element.remove();
                     allCards.splice(index, 1);
                     updateCounter();
-                    checkAllCards(); 
+                    saveAndCheck(); 
                 }
             }
         }
@@ -794,7 +866,7 @@
                 card.inputs.forEach((input, i) => {
                     if (i !== 12) { input.value = ''; input.classList.remove('matched'); }
                 });
-                checkAllCards();
+                saveAndCheck();
             }
         }
 
@@ -860,8 +932,11 @@
         function loadRoundState(roundNum) {
             cardsContainer.innerHTML = '';
             allCards = [];
-            nextCardIndex = 0;
+            
+            roundDisplay.textContent = `Rodada ${roundNum}`; 
+
             if (!roundsData[roundNum]) roundsData[roundNum] = { called: [], history: [], cards: [] };
+            
             const data = roundsData[roundNum];
             calledNumbers = new Set(data.called);
             callHistory = [...data.history];
@@ -872,25 +947,32 @@
                 else btn.classList.remove('called');
             });
 
-            if (data.cards.length > 0) data.cards.forEach(c => addCardUI(c.values, c.name));
-            else addCardUI(); 
+            if (data.cards.length > 0) {
+                data.cards.forEach(c => addCardUI(c.values, c.name));
+            } else {
+                // Só adiciona uma cartela vazia se a rodada 1 for virgem
+                if (roundNum === 1 && Object.keys(roundsData).length <= 1) addCardUI(); 
+            }
             
             updateLastCalledUI();
+            checkAllCards();
         }
 
         function nextRound() {
-            if(confirm(`Ir para a próxima rodada? Suas cartelas atuais serão salvas nesta rodada.`)) {
-                saveCurrentRoundState(); currentRound++; 
-                roundDisplay.textContent = `Rodada ${currentRound}`; 
-                updateActivePrizeRow(); loadRoundState(currentRound); 
+            if(confirm(`Ir para a próxima rodada? Suas cartelas atuais serão salvas.`)) {
+                currentRound++; 
+                updateActivePrizeRow(); 
+                loadRoundState(currentRound); 
+                persistData();
             }
         }
 
         function prevRound() {
             if (currentRound > 1) {
-                saveCurrentRoundState(); currentRound--;
-                roundDisplay.textContent = `Rodada ${currentRound}`;
-                updateActivePrizeRow(); loadRoundState(currentRound); 
+                currentRound--;
+                updateActivePrizeRow(); 
+                loadRoundState(currentRound); 
+                persistData();
             } else {
                 alert("Você já está na primeira rodada!");
             }
@@ -898,14 +980,13 @@
 
         function updateCounter() { counterText.textContent = `${allCards.length} / ${MAX_CARDS} Cartelas`; }
 
-        // --- SISTEMA DE CÂMERA 100% PROFISSIONAL ---
+        // --- SISTEMA DE CÂMERA INFALÍVEL POR COLUNAS DE BINGO ---
         let videoStreamTrack = null;
 
         async function openCameraScanner() {
             const modal = document.getElementById('camera-modal');
             const video = document.getElementById('video-stream');
             try {
-                // Força a resolução máxima e câmera traseira
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
                 });
@@ -923,31 +1004,22 @@
             modal.style.display = 'none';
         }
 
-        // Função "Estilo CamScanner" - Transforma a foto em um documento perfeito
         function enhanceImageForOCR(ctx, width, height) {
             let imgData = ctx.getImageData(0, 0, width, height);
             let data = imgData.data;
             let totalBrightness = 0;
-
-            // Passo 1: Transforma em tons de cinza e descobre a claridade média da foto
             for (let i = 0; i < data.length; i += 4) {
                 let r = data[i], g = data[i+1], b = data[i+2];
                 let gray = (r * 0.299 + g * 0.587 + b * 0.114);
                 data[i] = data[i+1] = data[i+2] = gray;
                 totalBrightness += gray;
             }
-
             let avgBrightness = totalBrightness / (width * height);
-            // Define o ponto de corte para separar o que é papel (fundo) do que é tinta (número)
             let threshold = avgBrightness * 0.85;
-
-            // Passo 2: Apaga o fundo (deixa branco puro) e engrossa os números (preto puro)
             for (let i = 0; i < data.length; i += 4) {
-                let gray = data[i];
-                let color = gray < threshold ? 0 : 255;
+                let color = data[i] < threshold ? 0 : 255;
                 data[i] = data[i+1] = data[i+2] = color;
             }
-
             ctx.putImageData(imgData, 0, 0);
         }
 
@@ -955,7 +1027,6 @@
             const video = document.getElementById('video-stream');
             const guide = document.querySelector('.scanner-guide');
             const canvas = document.getElementById('hidden-canvas');
-            // 'willReadFrequently' deixa o processamento da imagem mais rápido no celular
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
             const statusText = document.getElementById('scan-status');
             const btnCapture = document.querySelector('.btn-capture');
@@ -968,7 +1039,6 @@
                 try {
                     const videoRect = video.getBoundingClientRect();
                     const guideRect = guide.getBoundingClientRect();
-                    
                     const scaleX = video.videoWidth / videoRect.width;
                     const scaleY = video.videoHeight / videoRect.height;
 
@@ -977,27 +1047,22 @@
                     const cropWidth = guideRect.width * scaleX;
                     const cropHeight = guideRect.height * scaleY;
 
-                    // 1. UPSCALING 2X (Dobra o tamanho para a IA ler perfeitamente)
                     canvas.width = cropWidth * 2;
                     canvas.height = cropHeight * 2;
 
-                    // Desenha a imagem na tela invisível
                     ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
-                    
-                    // 2. APLICA O FILTRO PROFISSIONAL (Tipo CamScanner)
                     enhanceImageForOCR(ctx, canvas.width, canvas.height);
                     
                     closeCameraScanner();
                     statusText.style.display = 'block';
-                    statusText.textContent = "IA processando todos os números...";
+                    statusText.textContent = "IA organizando números nas colunas certas...";
 
                     const imageData = canvas.toDataURL('image/jpeg', 1.0);
 
-                    // 3. IA TESSERACT CONFIGURADA PARA BLOCOS DE TEXTO ALINHADOS
                     const worker = await Tesseract.createWorker('eng');
                     await worker.setParameters({
                         tessedit_char_whitelist: '0123456789',
-                        tessedit_pageseg_mode: '6', // PSM 6: Informa a IA que é um bloco perfeitamente alinhado
+                        tessedit_pageseg_mode: '6', 
                     });
 
                     const result = await worker.recognize(imageData);
@@ -1005,72 +1070,80 @@
 
                     if (!result || !result.data || !result.data.words) throw new Error("Nenhum número detectado.");
 
-                    let validItems = [];
+                    // LOGICA DE COLUNAS INFALÍVEL
+                    // Criamos baldes para as colunas B, I, N, G, O
+                    let cols = [[], [], [], [], []];
 
                     result.data.words.forEach(w => {
                         let text = w.text.trim(); 
                         if(text) {
                             let n = parseInt(text, 10);
                             if(n >= 1 && n <= 75) {
-                                let cx = (w.bbox.x0 + w.bbox.x1) / 2;
-                                let cy = (w.bbox.y0 + w.bbox.y1) / 2; 
-                                validItems.push({ number: n, cx: cx, cy: cy });
+                                let cy = (w.bbox.y0 + w.bbox.y1) / 2; // Só importa a altura
+                                
+                                // O valor do número define OBRIGATORIAMENTE a coluna
+                                if (n >= 1 && n <= 15) cols[0].push({number: n, cy: cy});
+                                else if (n >= 16 && n <= 30) cols[1].push({number: n, cy: cy});
+                                else if (n >= 31 && n <= 45) cols[2].push({number: n, cy: cy});
+                                else if (n >= 46 && n <= 60) cols[3].push({number: n, cy: cy});
+                                else if (n >= 61 && n <= 75) cols[4].push({number: n, cy: cy});
                             }
                         }
                     });
 
-                    if (validItems.length > 0) {
+                    let formattedCard = new Array(25).fill('');
+                    let numbersAdded = 0;
+
+                    // Para cada coluna, organiza de cima pra baixo e preenche a cartela
+                    for (let c = 0; c < 5; c++) {
+                        // Ordena os números da coluna da menor altura(topo) para maior(fundo)
+                        cols[c].sort((a, b) => a.cy - b.cy);
                         
-                        // 4. GRADE FÍSICA ESTRITA (Baseada no tamanho da tela)
-                        let colWidth = canvas.width / 5;
-                        let rowHeight = canvas.height / 5;
-
-                        let formattedCard = new Array(25).fill('');
-                        let numbersAdded = 0;
-
-                        validItems.forEach(item => {
-                            let col = Math.floor(item.cx / colWidth);
-                            let row = Math.floor(item.cy / rowHeight);
-
-                            if (col < 0) col = 0; if (col > 4) col = 4;
-                            if (row < 0) row = 0; if (row > 4) row = 4;
-
-                            let index = row * 5 + col;
-
-                            // 5. REGRA DO BINGO
-                            let isValidForCol = false;
-                            if (col === 0 && item.number >= 1 && item.number <= 15) isValidForCol = true;
-                            if (col === 1 && item.number >= 16 && item.number <= 30) isValidForCol = true;
-                            if (col === 2 && item.number >= 31 && item.number <= 45) isValidForCol = true;
-                            if (col === 3 && item.number >= 46 && item.number <= 60) isValidForCol = true;
-                            if (col === 4 && item.number >= 61 && item.number <= 75) isValidForCol = true;
-
-                            if (index !== 12 && isValidForCol) {
-                                if (formattedCard[index] === '') {
-                                    formattedCard[index] = item.number;
-                                    numbersAdded++;
-                                }
+                        // Remove números duplicados lidos pela IA por engano
+                        let uniqueCol = [];
+                        let seen = new Set();
+                        for(let item of cols[c]) {
+                            if(!seen.has(item.number)) {
+                                seen.add(item.number);
+                                uniqueCol.push(item);
                             }
-                        });
-
-                        let defaultName = `Cartela ${getLetterName(nextCardIndex)}`;
-                        let customName = prompt("Cartela lida com sucesso! Digite um nome/número:", defaultName);
-                        if (!customName || customName.trim() === '') customName = defaultName;
-
-                        addCardUI(formattedCard, customName);
-                        
-                        if(numbersAdded === 24) {
-                            alert("MÁXIMA PRECISÃO! Todos os 24 números foram lidos e encaixados perfeitamente.");
-                        } else {
-                            alert(`Quase lá! A IA leu ${numbersAdded} números com precisão.\nComplete os que faltaram tocando nos espaços em branco.`);
                         }
 
-                    } else {
-                        alert("Não foi possível ler os números. Enquadre APENAS a grade de números no quadrado verde da tela.");
+                        let rowIndex = 0;
+                        for (let i = 0; i < uniqueCol.length; i++) {
+                            if (rowIndex > 4) break; // Máximo de 5 linhas por coluna
+                            
+                            let index = rowIndex * 5 + c;
+                            
+                            // Pula o espaço central (Linha 3, Coluna 3 -> index 12)
+                            if (index === 12) {
+                                rowIndex++;
+                                index = rowIndex * 5 + c;
+                            }
+                            
+                            if (rowIndex <= 4) {
+                                formattedCard[index] = uniqueCol[i].number;
+                                numbersAdded++;
+                                rowIndex++;
+                            }
+                        }
                     }
+
+                    let defaultName = `Cartela ${getLetterName(nextCardIndex)}`;
+                    let customName = prompt("Cartela lida! Digite um nome/número:", defaultName);
+                    if (!customName || customName.trim() === '') customName = defaultName;
+
+                    addCardUI(formattedCard, customName);
+                    
+                    if(numbersAdded === 24) {
+                        alert("SUCESSO! Os 24 números foram lidos e colocados 100% nas colunas certas.");
+                    } else {
+                        alert(`Quase lá! A IA leu ${numbersAdded} números.\nEles foram colocados estritamente em suas colunas (B,I,N,G,O). Complete os buracos tocando neles.`);
+                    }
+
                 } catch (error) {
                     console.error(error);
-                    alert("A imagem não pôde ser lida. Tente limpar a lente e melhorar a iluminação.");
+                    alert("Erro na leitura. Tente alinhar a cartela e usar um local bem iluminado.");
                     closeCameraScanner();
                 } finally {
                     statusText.style.display = 'none';
